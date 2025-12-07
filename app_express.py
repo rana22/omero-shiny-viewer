@@ -138,9 +138,8 @@ with ui.layout_column_wrap(width=1 / 3):
 # -------------------------------------------------------------------
 
 
-
 @render.ui
-def iviewer_frame():
+def iviewer_frame_svelte():
     """
     Embed the existing Svelte+iviewer app in an iframe.
 
@@ -150,7 +149,7 @@ def iviewer_frame():
     img_id = input.image_id().strip() or "11422"
 
     svelte_url = (
-        f"https://rana22.github.io/svelte-app/#/"
+        f"https://rana22.github.io/svelte-app/#/omero?images=1234"
     )
 
     return core_ui.HTML(
@@ -173,16 +172,17 @@ def iviewer_frame_image():
     """
     img_id = input.image_id().strip() or "11422"
 
-    svelte_url = (
-        f"https://rana22.github.io/svelte-app/#/omero?images=1234"
+    omero_url = (
+        f"https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422/"
     )
 
     return core_ui.HTML(
         f"""
         <iframe
-          src="{svelte_url}"
+          src="{omero_url}"
           style="width:100%; height:600px; border:none;"
           allowfullscreen
         ></iframe>
         """
     )
+
