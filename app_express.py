@@ -162,3 +162,27 @@ def iviewer_frame():
         ></iframe>
         """
     )
+
+@render.ui
+def iviewer_frame_image():
+    """
+    Embed the existing Svelte+iviewer app in an iframe.
+
+    Assumes your Svelte app listens to `image_id` in the URL, e.g.
+    https://rana22.github.io/svelte-app/#/omero?images=1234
+    """
+    img_id = input.image_id().strip() or "11422"
+
+    svelte_url = (
+        f"https://rana22.github.io/svelte-app/#/omero?images=1234"
+    )
+
+    return core_ui.HTML(
+        f"""
+        <iframe
+          src="{svelte_url}"
+          style="width:100%; height:600px; border:none;"
+          allowfullscreen
+        ></iframe>
+        """
+    )
