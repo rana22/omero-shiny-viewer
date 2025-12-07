@@ -138,47 +138,6 @@ with ui.layout_column_wrap(width=1 / 3):
 # -------------------------------------------------------------------
 
 
-@render.image
-def thumb():
-    # react to button click if you want (optional)
-    _ = input.load_btn()
-
-    img_id = input.image_id().strip()
-    if not img_id:
-        return None
-
-    try:
-        data = fetch_binary(omero_thumbnail_url(img_id))
-    except Exception as e:
-        # You can show this in UI via a notification if desired
-        print(f"Error fetching thumbnail for {img_id}: {e}")
-        return None
-
-    return {
-        "src": io.BytesIO(data),
-        "format": "jpeg",
-    }
-
-
-@render.image
-def full_img():
-    _ = input.load_btn()
-
-    img_id = input.image_id().strip()
-    if not img_id:
-        return None
-
-    try:
-        data = fetch_binary(omero_full_image_url(img_id))
-    except Exception as e:
-        print(f"Error fetching full image for {img_id}: {e}")
-        return None
-
-    return {
-        "src": io.BytesIO(data),
-        "format": "jpeg",
-    }
-
 
 @render.ui
 def iviewer_frame():
@@ -191,7 +150,7 @@ def iviewer_frame():
     img_id = input.image_id().strip() or "11422"
 
     svelte_url = (
-        f"https://rana22.github.io/svelte-app/#/omero?images=11422"
+        f"https://rana22.github.io/svelte-app/#/"
     )
 
     return core_ui.HTML(
