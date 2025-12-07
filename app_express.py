@@ -73,11 +73,11 @@ if not OMERO_USER or not OMERO_PASS:
 
 
 def omero_thumbnail_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}/"
+    return f"{OMERO_BASE}/webgateway/render_thumbnail/11422/"
 
 
 def omero_full_image_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_image/{image_id}/"
+    return f"{OMERO_BASE}/webgateway/render_image/11422/"
 
 
 def fetch_binary(url: str) -> bytes:
