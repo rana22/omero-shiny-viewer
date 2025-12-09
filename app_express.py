@@ -1,124 +1,111 @@
 import io
 import os
-from typing import Optional, Dict, Any
+from typing import Optional
 
 import httpx
-from shiny.express import ui, input, render
-from shiny import reactive
+from shiny import ui as core_ui, render, reactive
+from shiny.express import ui, input
 
 # -------------------------------------------------------------------
-# Config from environment
+# Configuration
 # -------------------------------------------------------------------
+
 OMERO_BASE = os.environ.get("OMERO_BASE", "https://nife-dev.cancer.gov")
+
 OMERO_USERNAME = os.environ.get("OMERO_USERNAME")
 OMERO_PASSWORD = os.environ.get("OMERO_PASSWORD")
+
 DEFAULT_TIMEOUT = 10.0
 
-# OMERO endpoints – adjust if you use omero_plus vs webclient login
-OMERO_LOGIN_URL = f"{OMERO_BASE}/omero_plus/login/"
-OMERO_THUMBNAIL_URL = f"{OMERO_BASE}/webgateway/render_thumbnail/{{image_id}}/"
-OMERO_FULL_URL = f"{OMERO_BASE}/webgateway/render_image/{{image_id}}/"
+if not OMERO_USERNAME or not OMERO_PASSWORD:
+    print("WARNING: OMERO_USERNAME / OMERO_PASSWORD not set – image fetches will fail.")
+
 
 # -------------------------------------------------------------------
-# Global-ish state: store session + status in Shiny reactives
+# OMERO helpers
 # -------------------------------------------------------------------
-session_client: reactive.Value[Optional[httpx.Client]] = reactive.Value(None)
-login_status: reactive.Value[str] = reactive.Value("Not logged in.")
 
-
-def _make_client() -> httpx.Client:
-    # verify=False here only if needed for internal certs; otherwise remove.
-    return httpx.Client(
-        timeout=DEFAULT_TIMEOUT,
-        verify=False,
-        follow_redirects=True,
-    )
-
-
-def omero_login() -> bool:
+def omero_login() -> Optional[httpx.Client]:
     """
-    Try to log in to OMERO using OMERO_USERNAME/OMERO_PASSWORD.
-    Returns True if login is (likely) successful, False otherwise.
-    Updates session_client and login_status reactives.
+    Log into OMERO using a service account and return an httpx.Client
+    with the session cookie stored. Returns None if login fails.
     """
-
     if not OMERO_USERNAME or not OMERO_PASSWORD:
-        login_status.set("ERROR: OMERO_USERNAME or OMERO_PASSWORD is not set.")
-        session_client.set(None)
-        return False
+        return None
 
-    client = _make_client()
+    login_url = f"{OMERO_BASE}/omero_plus/login/"
+
+    client = httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True)  # verify=False only if needed
 
     try:
-        # 1) Get login page to pick up CSRF token cookie if needed
-        resp = client.get(OMERO_LOGIN_URL)
-        resp.raise_for_status()
-
-        # 2) POST credentials. The exact form fields depend on your OMERO Plus config.
-        #    Adjust these names if your login form uses different fields.
-        data = {
-            "username": OMERO_USERNAME,
-            "password": OMERO_PASSWORD,
-            "server": "1",
-            "url": "/",  # redirect target after login; can be anything
-        }
-
-        post_resp = client.post(OMERO_LOGIN_URL, data=data)
-        post_resp.raise_for_status()
-
-        # Heuristic: if we're still on a login URL or see "login" in URL, assume failure.
-        if "login" in str(post_resp.url):
-            login_status.set("ERROR: OMERO login failed (still on login page).")
-            session_client.set(None)
-            return False
-
-        # If we got here, assume success.
-        login_status.set(f"Logged in to OMERO as '{OMERO_USERNAME}'.")
-        session_client.set(client)
-        return True
-
+        resp = client.post(
+            login_url,
+            data={"username": OMERO_USERNAME, "password": OMERO_PASSWORD},
+            follow_redirects=False,
+        )
     except Exception as e:
-        login_status.set(f"ERROR logging in to OMERO: {e}")
-        session_client.set(None)
-        return False
+        print(f"Error contacting OMERO login endpoint: {e}")
+        client.close()
+        return None
+
+    # OMERO typically redirects (302) after successful login
+    if resp.status_code not in (200, 302):
+        print(f"OMERO login failed: HTTP {resp.status_code}")
+        client.close()
+        return None
+
+    # If no session cookie, something is off
+    if "sessionid" not in client.cookies:
+        print("OMERO login failed: no sessionid cookie received.")
+        client.close()
+        return None
+
+    return client
 
 
-def fetch_image_bytes(image_id: str, full: bool = False) -> Optional[bytes]:
+def omero_thumbnail_url(image_id: str) -> str:
+    return f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}/"
+
+
+def omero_full_image_url(image_id: str) -> str:
+    return f"{OMERO_BASE}/webgateway/render_image/{image_id}/"
+
+
+def fetch_omero_image(image_id: str, kind: str) -> Optional[bytes]:
     """
-    Ensure we have a logged-in OMERO session, then fetch thumbnail or full image.
-    Returns raw bytes or None on error; sets login_status with error info.
+    kind: "thumb" or "full"
     """
-    client = session_client.get()
-
-    # If no client yet, try to login first.
+    client = omero_login()
     if client is None:
-        ok = omero_login()
-        if not ok:
-            return None
-        client = session_client.get()
-        if client is None:
-            return None
-
-    # Build URL
-    if full:
-        url = OMERO_FULL_URL.format(image_id=image_id)
-    else:
-        url = OMERO_THUMBNAIL_URL.format(image_id=image_id)
+        return None
 
     try:
+        if kind == "thumb":
+            url = omero_thumbnail_url(image_id)
+        else:
+            url = omero_full_image_url(image_id)
+
         resp = client.get(url)
         resp.raise_for_status()
         return resp.content
     except Exception as e:
-        login_status.set(f"ERROR fetching image {image_id}: {e}")
+        print(f"Error fetching OMERO {kind} image for {image_id}: {e}")
         return None
+    finally:
+        client.close()
 
 
 # -------------------------------------------------------------------
-# UI (express)
+# Reactive status message
 # -------------------------------------------------------------------
 
-ui.page_opts(title="OMERO Shiny Login + Proxy Viewer", fillable=True)
+status_msg = reactive.Value("Ready. No image requested yet.")
+
+# -------------------------------------------------------------------
+# UI (Express)
+# -------------------------------------------------------------------
+
+ui.page_opts(title="OMERO Shiny Proxy Viewer", fillable=True)
 
 with ui.sidebar(open="open"):
     ui.input_text(
@@ -127,47 +114,58 @@ with ui.sidebar(open="open"):
         value="11422",
         width="100%",
     )
-    ui.input_action_button("load_btn", "Login + Load Image", width="100%")
+    ui.input_action_button("load_btn", "Load Image", width="100%")
     ui.hr()
-    ui.output_text("status_text")
+    ui.markdown(
+        """
+        **How this works**
+
+        - Shiny (server) logs into OMERO using a service account.
+        - Shiny then fetches image data via `/webgateway` and serves it to the browser.
+        - The browser never talks directly to OMERO.
+        """
+    )
 
 with ui.layout_column_wrap(width=1 / 2):
     with ui.card(full_screen=True):
-        ui.card_header("Thumbnail (via OMERO session)")
-        ui.output_image("thumb")
+        ui.card_header("Thumbnail (proxied)")
+        core_ui.output_image("thumb")
 
     with ui.card(full_screen=True):
-        ui.card_header("Full Image (via OMERO session)")
-        ui.output_image("full_img")
+        ui.card_header("Full image (proxied)")
+        core_ui.output_image("full_img")
+
+with ui.card():
+    ui.card_header("Status")
+    core_ui.output_text("status_text")
 
 
 # -------------------------------------------------------------------
 # Server logic
 # -------------------------------------------------------------------
 
-# Show current login / error status
 @render.text
 def status_text() -> str:
-    return login_status.get()
+    return status_msg()
 
 
-# Trigger login + fetch when button is clicked
 @render.image
-def thumb() -> Optional[Dict[str, Any]]:
-    # Only do work when user clicks the button
-    if input.load_btn() < 1:
-        return None
-
+def thumb():
+    # Only react when button clicked, but still allow initial value
+    _ = input.load_btn()  # to register dependency
     img_id = input.image_id().strip()
+
     if not img_id:
-        login_status.set("Please enter an OMERO image ID.")
+        status_msg.set("Please enter an image ID.")
         return None
 
-    data = fetch_image_bytes(img_id, full=False)
+    data = fetch_omero_image(img_id, kind="thumb")
+
     if data is None:
-        # Error message already set in login_status
+        status_msg.set("Login or thumbnail fetch failed. Check credentials or network.")
         return None
 
+    status_msg.set(f"Loaded thumbnail for image {img_id}.")
     return {
         "src": io.BytesIO(data),
         "format": "jpeg",
@@ -175,16 +173,17 @@ def thumb() -> Optional[Dict[str, Any]]:
 
 
 @render.image
-def full_img() -> Optional[Dict[str, Any]]:
-    if input.load_btn() < 1:
-        return None
-
+def full_img():
+    _ = input.load_btn()  # same trigger
     img_id = input.image_id().strip()
+
     if not img_id:
         return None
 
-    data = fetch_image_bytes(img_id, full=True)
+    data = fetch_omero_image(img_id, kind="full")
+
     if data is None:
+        # Don't override a more detailed status from thumb()
         return None
 
     return {
