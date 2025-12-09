@@ -1,4 +1,5 @@
 import os
+import json
 import httpx
 
 from shiny.express import ui, input
@@ -15,17 +16,19 @@ METADATA_API_URL = os.environ.get(
 DEFAULT_TIMEOUT = 10.0
 
 
-def fetch_metadata() -> str:
-    """Call the FastAPI metadata endpoint and return response text."""
+def fetch_metadata_json():
+    """Call the FastAPI metadata endpoint and return parsed JSON or an error."""
     try:
         with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
             resp = client.get(METADATA_API_URL)
             resp.raise_for_status()
-            # return raw text (often JSON); you can pretty-print later
-            return resp.text
+            return resp.json()
     except Exception as e:
-        # Return an error message instead of crashing the app
-        return f"Error contacting metadata API: {e}"
+        # Return an error object so UI can still render something
+        return {
+            "error": str(e),
+            "endpoint": METADATA_API_URL,
+        }
 
 
 # -------------------------------------------------------------------
@@ -46,18 +49,23 @@ with ui.sidebar(open="open"):
     ui.input_action_button("refresh", "Refresh", width="100%")
 
 with ui.card(full_screen=True):
-    ui.card_header("Metadata API response")
-    # classic-core output, since express ui has no output_text
-    core_ui.output_text("metadata_response")
+    ui.card_header("Metadata API JSON response")
+    core_ui.output_ui("metadata_response")  # render.ui target
 
 
 # -------------------------------------------------------------------
 # Server logic
 # -------------------------------------------------------------------
 
-@render.text
+@render.ui
 def metadata_response():
-    # re-run when refresh button is clicked
+    # Make this reactive to button clicks
     input.refresh()
 
-    return fetch_metadata()
+    data = fetch_metadata_json()
+
+    # Pretty-print JSON
+    pretty = json.dumps(data, indent=2, sort_keys=True)
+
+    # Show inside <pre> for nice formatting
+    return core_ui.pre(pretty)
