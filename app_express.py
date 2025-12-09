@@ -32,6 +32,12 @@ def omero_login() -> Optional[httpx.Client]:
     """
     if not OMERO_USERNAME or not OMERO_PASSWORD:
         return None
+    
+    if OMERO_USERNAME:
+        print(f"user name is present {OMERO_USERNAME}")
+
+    if OMERO_PASSWORD:
+        print(f"user OMERO_PASSWORD is present")
 
     login_url = f"{OMERO_BASE}/omero_plus/login/"
 
@@ -43,6 +49,7 @@ def omero_login() -> Optional[httpx.Client]:
             data={"username": OMERO_USERNAME, "password": OMERO_PASSWORD},
             follow_redirects=False,
         )
+    
     except Exception as e:
         print(f"Error contacting OMERO login endpoint: {e}")
         client.close()
@@ -85,8 +92,9 @@ def fetch_omero_image(image_id: str, kind: str) -> Optional[bytes]:
         else:
             url = omero_full_image_url(image_id)
 
-        resp = client.get(url)
+        resp = client.get('https://nife-dev.cancer.gov/metadata/api/fast-api')
         resp.raise_for_status()
+        print(resp.content)
         return resp.content
     except Exception as e:
         print(f"Error fetching OMERO {kind} image for {image_id}: {e}")
