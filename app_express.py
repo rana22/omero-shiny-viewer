@@ -1,154 +1,54 @@
-import io
 import os
-from typing import Optional
-
 import httpx
-from shiny import ui as core_ui, render, reactive
+
 from shiny.express import ui, input
+from shiny import render, ui as core_ui
 
 # -------------------------------------------------------------------
-# Configuration
+# Config
 # -------------------------------------------------------------------
 
-OMERO_BASE = os.environ.get("OMERO_BASE", "https://nife-dev.cancer.gov")
-
-OMERO_USERNAME = os.environ.get("OMERO_USERNAME")
-OMERO_PASSWORD = os.environ.get("OMERO_PASSWORD")
-
+METADATA_API_URL = os.environ.get(
+    "METADATA_API_URL",
+    "https://nife-dev.cancer.gov/metadata/api/fast-api",
+)
 DEFAULT_TIMEOUT = 10.0
 
-if not OMERO_USERNAME or not OMERO_PASSWORD:
-    print("WARNING: OMERO_USERNAME / OMERO_PASSWORD not set – image fetches will fail.")
 
-
-# -------------------------------------------------------------------
-# OMERO helpers
-# -------------------------------------------------------------------
-
-def omero_login() -> Optional[httpx.Client]:
-    """
-    Log into OMERO using a service account and return an httpx.Client
-    with the session cookie stored. Returns None if login fails.
-    """
-    if not OMERO_USERNAME or not OMERO_PASSWORD:
-        return None
-    
-    if OMERO_USERNAME:
-        print(f"user name is present {OMERO_USERNAME}")
-
-    if OMERO_PASSWORD:
-        print(f"user OMERO_PASSWORD is present")
-
-    login_url = f"{OMERO_BASE}/metadata/api/fast-api"
-
-    client = httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True)  # verify=False only if needed
-
+def fetch_metadata() -> str:
+    """Call the FastAPI metadata endpoint and return response text."""
     try:
-        resp = client.post(
-            login_url,
-            data={
-                "username": OMERO_USERNAME,
-                "password": OMERO_PASSWORD,
-            },
-            follow_redirects=False,
-        )
-    
+        with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
+            resp = client.get(METADATA_API_URL)
+            resp.raise_for_status()
+            # return raw text (often JSON); you can pretty-print later
+            return resp.text
     except Exception as e:
-        print(f"Error contacting OMERO login endpoint: {e}")
-        client.close()
-        return None
-
-    # OMERO typically redirects (302) after successful login
-    if resp.status_code not in (200, 302):
-        print(f"OMERO login failed: HTTP {resp.status_code}")
-        client.close()
-        return None
-
-    # If no session cookie, something is off
-    if "sessionid" not in client.cookies:
-        print("OMERO login failed: no sessionid cookie received.")
-        client.close()
-        return None
-
-    return client
-
-
-def omero_thumbnail_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/metadata/api/fast-api"
-
-
-def omero_full_image_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/metadata/api/fast-api"
-
-
-def fetch_omero_image(image_id: str, kind: str) -> Optional[bytes]:
-    """
-    kind: "thumb" or "full"
-    """
-    client = omero_login()
-    if client is None:
-        return None
-
-    try:
-        if kind == "thumb":
-            url = omero_thumbnail_url(image_id)
-        else:
-            url = omero_full_image_url(image_id)
-
-        resp = client.get('https://nife-dev.cancer.gov/metadata/api/fast-api')
-        resp.raise_for_status()
-        print(resp.content)
-        return resp.content
-    except Exception as e:
-        print(f"Error fetching OMERO {kind} image for {image_id}: {e}")
-        return None
-    finally:
-        client.close()
+        # Return an error message instead of crashing the app
+        return f"Error contacting metadata API: {e}"
 
 
 # -------------------------------------------------------------------
-# Reactive status message
+# UI (Shiny Express)
 # -------------------------------------------------------------------
 
-status_msg = reactive.Value("Ready. No image requested yet.")
-
-# -------------------------------------------------------------------
-# UI (Express)
-# -------------------------------------------------------------------
-
-ui.page_opts(title="OMERO Shiny Proxy Viewer", fillable=True)
+ui.page_opts(title="OMERO Metadata API Test", fillable=True)
 
 with ui.sidebar(open="open"):
-    ui.input_text(
-        "image_id",
-        "OMERO Image ID",
-        value="11422",
-        width="100%",
-    )
-    ui.input_action_button("load_btn", "Load Image", width="100%")
-    ui.hr()
     ui.markdown(
-        """
-        **How this works**
+        f"""
+        ### Metadata API Test
 
-        - Shiny (server) logs into OMERO using a service account.
-        - Shiny then fetches image data via `/webgateway` and serves it to the browser.
-        - The browser never talks directly to OMERO.
+        - Endpoint: `{METADATA_API_URL}`
+        - Click **Refresh** to re-query the API.
         """
     )
+    ui.input_action_button("refresh", "Refresh", width="100%")
 
-with ui.layout_column_wrap(width=1 / 2):
-    with ui.card(full_screen=True):
-        ui.card_header("Thumbnail (proxied)")
-        core_ui.output_image("thumb")
-
-    with ui.card(full_screen=True):
-        ui.card_header("Full image (proxied)")
-        core_ui.output_image("full_img")
-
-with ui.card():
-    ui.card_header("Status")
-    core_ui.output_text("status_text")
+with ui.card(full_screen=True):
+    ui.card_header("Metadata API response")
+    # classic-core output, since express ui has no output_text
+    core_ui.output_text("metadata_response")
 
 
 # -------------------------------------------------------------------
@@ -156,48 +56,8 @@ with ui.card():
 # -------------------------------------------------------------------
 
 @render.text
-def status_text() -> str:
-    return status_msg()
+def metadata_response():
+    # re-run when refresh button is clicked
+    input.refresh()
 
-
-@render.image
-def thumb():
-    # Only react when button clicked, but still allow initial value
-    _ = input.load_btn()  # to register dependency
-    img_id = input.image_id().strip()
-
-    if not img_id:
-        status_msg.set("Please enter an image ID.")
-        return None
-
-    data = fetch_omero_image(img_id, kind="thumb")
-
-    if data is None:
-        status_msg.set("Login or thumbnail fetch failed. Check credentials or network.")
-        return None
-
-    status_msg.set(f"Loaded thumbnail for image {img_id}.")
-    return {
-        "src": io.BytesIO(data),
-        "format": "jpeg",
-    }
-
-
-@render.image
-def full_img():
-    _ = input.load_btn()  # same trigger
-    img_id = input.image_id().strip()
-
-    if not img_id:
-        return None
-
-    data = fetch_omero_image(img_id, kind="full")
-
-    if data is None:
-        # Don't override a more detailed status from thumb()
-        return None
-
-    return {
-        "src": io.BytesIO(data),
-        "format": "jpeg",
-    }
+    return fetch_metadata()
