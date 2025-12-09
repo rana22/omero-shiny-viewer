@@ -1,104 +1,124 @@
-# # app_express.py
-# from shiny import reactive
-# from shiny.express import input, render, ui
-
-# # Page options (optional but nice)
-# ui.page_opts(title="Random Image iFrame Demo")
-
-# # --- Existing example: slider + text -----------------------------------------
-# ui.input_slider("n", "N", 0, 100, 20)
-
-
-# @render.code
-# def txt():
-#     return f"n*2 is {input.n() * 2}"
-
-
-# # --- New section: random image iframe ----------------------------------------
-
-# ui.hr()
-# ui.h3("Random image in an iframe")
-
-# # Button to change image
-# ui.input_action_button("next_img", "Next image")
-
-# ui.br()
-
-# # Reactive URL that depends on button clicks
-# @reactive.calc
-# def img_url() -> str:
-#     # each click changes the seed → new random image
-#     click_count = input.next_img()
-#     # use click_count as the seed so each press gives a new URL
-#     return f"https://picsum.photos/seed/{click_count}/800/400"
-
-# OMERO_VIEWER_BASE = "https://nife-dev.cancer.gov/iviewer/?images=11422"
-# # Render an iframe pointing to that URL
-# @render.ui
-# def image_frame():
-#     return ui.tags.iframe(
-#         src=OMERO_VIEWER_BASE,
-#         style="width: 100%; height: 400px; border: none;",
-#         title="Random image viewer",
-#     )
-
-# @render.ui
-# def image_frame1():
-#     return ui.tags.iframe(
-#         src=OMERO_VIEWER_BASE,
-#         style="width: 100%; height: 400px; border: none;",
-#         title="Random image viewer",
-#     )
-
-
 import io
 import os
+from typing import Optional, Dict, Any
 
 import httpx
-from shiny.express import input, render, ui
-from shiny import ui as core_ui  # classic UI outputs
+from shiny.express import ui, input, render
+from shiny import reactive
 
 # -------------------------------------------------------------------
-# Config
+# Config from environment
 # -------------------------------------------------------------------
-
-OMERO_BASE = os.environ.get("OMERO_BASE", "https://nife-dev.cancer.gov").rstrip("/")
+OMERO_BASE = os.environ.get("OMERO_BASE", "https://nife-dev.cancer.gov")
+OMERO_USERNAME = os.environ.get("OMERO_USERNAME")
+OMERO_PASSWORD = os.environ.get("OMERO_PASSWORD")
 DEFAULT_TIMEOUT = 10.0
 
-OMERO_USER = os.environ.get("OMERO_PROXY_USER")
-OMERO_PASS = os.environ.get("OMERO_PROXY_PASS")
+# OMERO endpoints – adjust if you use omero_plus vs webclient login
+OMERO_LOGIN_URL = f"{OMERO_BASE}/omero_plus/login/"
+OMERO_THUMBNAIL_URL = f"{OMERO_BASE}/webgateway/render_thumbnail/{{image_id}}/"
+OMERO_FULL_URL = f"{OMERO_BASE}/webgateway/render_image/{{image_id}}/"
 
-if not OMERO_USER or not OMERO_PASS:
-    print("WARNING: OMERO_PROXY_USER / OMERO_PROXY_PASS not set – image fetches will fail.")
-
-
-def omero_thumbnail_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_thumbnail/11422/"
-
-
-def omero_full_image_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_image/11422/"
+# -------------------------------------------------------------------
+# Global-ish state: store session + status in Shiny reactives
+# -------------------------------------------------------------------
+session_client: reactive.Value[Optional[httpx.Client]] = reactive.Value(None)
+login_status: reactive.Value[str] = reactive.Value("Not logged in.")
 
 
-def fetch_binary(url: str) -> bytes:
+def _make_client() -> httpx.Client:
+    # verify=False here only if needed for internal certs; otherwise remove.
+    return httpx.Client(
+        timeout=DEFAULT_TIMEOUT,
+        verify=False,
+        follow_redirects=True,
+    )
+
+
+def omero_login() -> bool:
     """
-    Server-side fetch to OMERO using service-account credentials.
+    Try to log in to OMERO using OMERO_USERNAME/OMERO_PASSWORD.
+    Returns True if login is (likely) successful, False otherwise.
+    Updates session_client and login_status reactives.
     """
-    auth = (OMERO_USER, OMERO_PASS) if OMERO_USER and OMERO_PASS else None
 
-    # NOTE: verify=False only if you have internal/self-signed certs.
-    # For proper TLS, set verify=True or point to CA bundle.
-    with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=False, auth=auth) as client:
+    if not OMERO_USERNAME or not OMERO_PASSWORD:
+        login_status.set("ERROR: OMERO_USERNAME or OMERO_PASSWORD is not set.")
+        session_client.set(None)
+        return False
+
+    client = _make_client()
+
+    try:
+        # 1) Get login page to pick up CSRF token cookie if needed
+        resp = client.get(OMERO_LOGIN_URL)
+        resp.raise_for_status()
+
+        # 2) POST credentials. The exact form fields depend on your OMERO Plus config.
+        #    Adjust these names if your login form uses different fields.
+        data = {
+            "username": OMERO_USERNAME,
+            "password": OMERO_PASSWORD,
+            "server": "1",
+            "url": "/",  # redirect target after login; can be anything
+        }
+
+        post_resp = client.post(OMERO_LOGIN_URL, data=data)
+        post_resp.raise_for_status()
+
+        # Heuristic: if we're still on a login URL or see "login" in URL, assume failure.
+        if "login" in str(post_resp.url):
+            login_status.set("ERROR: OMERO login failed (still on login page).")
+            session_client.set(None)
+            return False
+
+        # If we got here, assume success.
+        login_status.set(f"Logged in to OMERO as '{OMERO_USERNAME}'.")
+        session_client.set(client)
+        return True
+
+    except Exception as e:
+        login_status.set(f"ERROR logging in to OMERO: {e}")
+        session_client.set(None)
+        return False
+
+
+def fetch_image_bytes(image_id: str, full: bool = False) -> Optional[bytes]:
+    """
+    Ensure we have a logged-in OMERO session, then fetch thumbnail or full image.
+    Returns raw bytes or None on error; sets login_status with error info.
+    """
+    client = session_client.get()
+
+    # If no client yet, try to login first.
+    if client is None:
+        ok = omero_login()
+        if not ok:
+            return None
+        client = session_client.get()
+        if client is None:
+            return None
+
+    # Build URL
+    if full:
+        url = OMERO_FULL_URL.format(image_id=image_id)
+    else:
+        url = OMERO_THUMBNAIL_URL.format(image_id=image_id)
+
+    try:
         resp = client.get(url)
         resp.raise_for_status()
         return resp.content
+    except Exception as e:
+        login_status.set(f"ERROR fetching image {image_id}: {e}")
+        return None
 
 
 # -------------------------------------------------------------------
-# UI (Express)
+# UI (express)
 # -------------------------------------------------------------------
 
-ui.page_opts(title="OMERO Shiny Proxy Viewer", fillable=True)
+ui.page_opts(title="OMERO Shiny Login + Proxy Viewer", fillable=True)
 
 with ui.sidebar(open="open"):
     ui.input_text(
@@ -107,82 +127,67 @@ with ui.sidebar(open="open"):
         value="11422",
         width="100%",
     )
-    ui.input_action_button("load_btn", "Load Image", width="100%")
+    ui.input_action_button("load_btn", "Login + Load Image", width="100%")
     ui.hr()
-    ui.markdown(
-        """
-        **How this works**
+    ui.output_text("status_text")
 
-        - Shiny server calls OMERO `/webgateway` using a service account.
-        - The browser talks only to this Shiny app.
-        - For full iviewer, we embed the existing Svelte-based viewer.
-        """
-    )
-
-with ui.layout_column_wrap(width=1 / 3):
+with ui.layout_column_wrap(width=1 / 2):
     with ui.card(full_screen=True):
-        ui.card_header("Thumbnail (via Shiny → OMERO proxy)")
-        core_ui.output_image("thumb")
+        ui.card_header("Thumbnail (via OMERO session)")
+        ui.output_image("thumb")
 
     with ui.card(full_screen=True):
-        ui.card_header("Full image (via Shiny → OMERO proxy)")
-        core_ui.output_image("full_img")
-
-    with ui.card(full_screen=True):
-        ui.card_header("Interactive iviewer (Svelte app iframe)")
-        core_ui.output_ui("iviewer_frame")
+        ui.card_header("Full Image (via OMERO session)")
+        ui.output_image("full_img")
 
 
 # -------------------------------------------------------------------
 # Server logic
 # -------------------------------------------------------------------
 
+# Show current login / error status
+@render.text
+def status_text() -> str:
+    return login_status.get()
 
-@render.ui
-def iviewer_frame_svelte():
-    """
-    Embed the existing Svelte+iviewer app in an iframe.
 
-    Assumes your Svelte app listens to `image_id` in the URL, e.g.
-    https://rana22.github.io/svelte-app/#/omero?images=1234
-    """
-    img_id = input.image_id().strip() or "11422"
+# Trigger login + fetch when button is clicked
+@render.image
+def thumb() -> Optional[Dict[str, Any]]:
+    # Only do work when user clicks the button
+    if input.load_btn() < 1:
+        return None
 
-    svelte_url = (
-        f"https://rana22.github.io/svelte-app/#/omero?images=1234"
-    )
+    img_id = input.image_id().strip()
+    if not img_id:
+        login_status.set("Please enter an OMERO image ID.")
+        return None
 
-    return core_ui.HTML(
-        f"""
-        <iframe
-          src="{svelte_url}"
-          style="width:100%; height:600px; border:none;"
-          allowfullscreen
-        ></iframe>
-        """
-    )
+    data = fetch_image_bytes(img_id, full=False)
+    if data is None:
+        # Error message already set in login_status
+        return None
 
-@render.ui
-def iviewer_frame_image():
-    """
-    Embed the existing Svelte+iviewer app in an iframe.
+    return {
+        "src": io.BytesIO(data),
+        "format": "jpeg",
+    }
 
-    Assumes your Svelte app listens to `image_id` in the URL, e.g.
-    https://rana22.github.io/svelte-app/#/omero?images=1234
-    """
-    img_id = input.image_id().strip() or "11422"
 
-    omero_url = (
-        f"https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422/"
-    )
+@render.image
+def full_img() -> Optional[Dict[str, Any]]:
+    if input.load_btn() < 1:
+        return None
 
-    return core_ui.HTML(
-        f"""
-        <iframe
-          src="{omero_url}"
-          style="width:100%; height:600px; border:none;"
-          allowfullscreen
-        ></iframe>
-        """
-    )
+    img_id = input.image_id().strip()
+    if not img_id:
+        return None
 
+    data = fetch_image_bytes(img_id, full=True)
+    if data is None:
+        return None
+
+    return {
+        "src": io.BytesIO(data),
+        "format": "jpeg",
+    }
