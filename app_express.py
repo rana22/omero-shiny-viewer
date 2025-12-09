@@ -39,14 +39,17 @@ def omero_login() -> Optional[httpx.Client]:
     if OMERO_PASSWORD:
         print(f"user OMERO_PASSWORD is present")
 
-    login_url = f"{OMERO_BASE}/omero_plus/login/"
+    login_url = f"{OMERO_BASE}/metadata/api/fast-api"
 
     client = httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True)  # verify=False only if needed
 
     try:
         resp = client.post(
             login_url,
-            data={"username": OMERO_USERNAME, "password": OMERO_PASSWORD},
+            data={
+                "username": OMERO_USERNAME,
+                "password": OMERO_PASSWORD,
+            },
             follow_redirects=False,
         )
     
@@ -71,11 +74,11 @@ def omero_login() -> Optional[httpx.Client]:
 
 
 def omero_thumbnail_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}/"
+    return f"{OMERO_BASE}/metadata/api/fast-api"
 
 
 def omero_full_image_url(image_id: str) -> str:
-    return f"{OMERO_BASE}/webgateway/render_image/{image_id}/"
+    return f"{OMERO_BASE}/metadata/api/fast-api"
 
 
 def fetch_omero_image(image_id: str, kind: str) -> Optional[bytes]:
