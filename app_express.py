@@ -1,71 +1,82 @@
+import io
 import os
-import json
 import httpx
-
 from shiny.express import ui, input
 from shiny import render, ui as core_ui
 
-# -------------------------------------------------------------------
-# Config
-# -------------------------------------------------------------------
 
+
+
+# ui.page_opts(title="OMERO image via FastAPI", fillable=True)
+
+# with ui.card():
+#     ui.card_header("Image from OMERO FastAPI")
+#     core_ui.output_image("omero_img")     # <-- image output
+
+
+# @render.image
+# def omero_img():
+#     data = fetch_metadata_bytes()
+#     print("data =", type(data), len(data) if data else None)
+
+#     if not data:
+#         return None
+
+#     return {
+#         "src": data,          # <-- wrap BYTES once
+#         "format": "jpeg",
+#     }
+
+import tempfile
+
+
+THUMB_TMP_DIR = tempfile.gettempdir()  # or a custom dir you control
+
+# def fetch_omero_thumb_bytes() -> bytes:
+#     # your existing httpx / OMERO call; just returns bytes
+#     data = ...  # <- thumb_bytes
+#     return data
+
+DEFAULT_TIMEOUT = 10.0
 METADATA_API_URL = os.environ.get(
     "METADATA_API_URL",
     "https://nife-dev.cancer.gov/metadata/api/fast-api",
 )
-DEFAULT_TIMEOUT = 10.0
 
-
-def fetch_metadata_json():
-    """Call the FastAPI metadata endpoint and return parsed JSON or an error."""
+def fetch_metadata_bytes() -> bytes | None:
     try:
         with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
-            resp = client.get(METADATA_API_URL)
+            payload = {
+                "user": "importer",
+                "password": "A)#958hya30r9&*H3r09",
+                "image_id": 11422,
+            }
+            resp = client.post(METADATA_API_URL, json=payload)
             resp.raise_for_status()
-            return resp.json()
+            print(resp.content)
+            return resp.content          # <-- BYTES, not BytesIO
     except Exception as e:
-        # Return an error object so UI can still render something
-        return {
-            "error": str(e),
-            "endpoint": METADATA_API_URL,
-        }
+        print("Error fetching bytes:", e)
+        return None
 
-
-# -------------------------------------------------------------------
-# UI (Shiny Express)
-# -------------------------------------------------------------------
-
-ui.page_opts(title="OMERO Metadata API Test", fillable=True)
-
-with ui.sidebar(open="open"):
-    ui.markdown(
-        f"""
-        ### Metadata API Test
-
-        - Endpoint: `{METADATA_API_URL}`
-        - Click **Refresh** to re-query the API.
-        """
-    )
-    ui.input_action_button("refresh", "Refresh", width="100%")
-
-with ui.card(full_screen=True):
-    ui.card_header("Metadata API JSON response")
-    core_ui.output_ui("metadata_response")  # render.ui target
-
-
-# -------------------------------------------------------------------
-# Server logic
-# -------------------------------------------------------------------
-
-@render.ui
+@render.image
 def metadata_response():
-    # Make this reactive to button clicks
-    input.refresh()
+    # 1. Get the JPEG bytes from OMERO
+    data = fetch_metadata_bytes()
+    print("data =", type(data), len(data))
 
-    data = fetch_metadata_json()
+    if not data:
+        return None
 
-    # Pretty-print JSON
-    pretty = json.dumps(data, indent=2, sort_keys=True)
+    # 2. Write to a temp file
+    tmp_path = os.path.join(THUMB_TMP_DIR, "omero_thumb.jpg")
+    with open(tmp_path, "wb") as f:
+        f.write(data)
 
-    # Show inside <pre> for nice formatting
-    return core_ui.pre(pretty)
+    # 3. Return a dict with a *path*, not BytesIO
+    return {
+        "src": tmp_path,
+        "width": "100%",       # optional
+        "height": "auto",      # optional
+        "alt": "OMERO thumbnail",
+    }
