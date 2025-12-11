@@ -46,9 +46,11 @@ METADATA_API_URL = os.environ.get(
 def fetch_metadata_bytes() -> bytes | None:
     try:
         with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
+            OMERO_USERNAME = os.environ.get("OMERO_USERNAME")
+            OMERO_PASSWORD = os.environ.get("OMERO_PASSWORD")
             payload = {
-                "user": "importer",
-                "password": "A)#958hya30r9&*H3r09",
+                "user": OMERO_USERNAME,
+                "password": OMERO_PASSWORD,
                 "image_id": 11422,
             }
             resp = client.post(METADATA_API_URL, json=payload)
