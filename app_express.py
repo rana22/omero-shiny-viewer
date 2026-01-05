@@ -1,123 +1,142 @@
-import io
-import os
-import httpx
-from shiny.express import ui, input
-from shiny import render, ui as core_ui, reactive
+# import io
+# import os
+# import httpx
+# from shiny.express import ui, input
+# from shiny import render, ui as core_ui, reactive
 
-import tempfile
+# import tempfile
 
-THUMB_TMP_DIR = tempfile.gettempdir()  # or a custom dir you control
+# THUMB_TMP_DIR = tempfile.gettempdir()  # or a custom dir you control
 
-DEFAULT_TIMEOUT = 10.0
-METADATA_API_URL = os.environ.get(
-    "METADATA_API_URL",
-    "https://nife-dev.cancer.gov/metadata/api/thumbnail",
-)
+# DEFAULT_TIMEOUT = 10.0
+# METADATA_API_URL = os.environ.get(
+#     "METADATA_API_URL",
+#     "https://nife-dev.cancer.gov/metadata/api/thumbnail",
+# )
 
-# def fetch_metadata_bytes(image_id) -> bytes | None:
-#     try:
-#         with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
+# # def fetch_metadata_bytes(image_id) -> bytes | None:
+# #     try:
+# #         with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
             
-#             payload = {
-#                 "user": "importer",
-#                 "password": "A)#958hya30r9&*H3r09",
-#                 "image_id": image_id,
-#             }
+# #             payload = {
+# #                 "user": "importer",
+# #                 "password": "A)#958hya30r9&*H3r09",
+# #                 "image_id": image_id,
+# #             }
 
-#             resp = client.post(METADATA_API_URL, json=payload)
-#             resp.raise_for_status()
-#             print(resp.content)
-#             return resp.content          # <-- BYTES, not BytesIO
+# #             resp = client.post(METADATA_API_URL, json=payload)
+# #             resp.raise_for_status()
+# #             print(resp.content)
+# #             return resp.content          # <-- BYTES, not BytesIO
 
-#     except Exception as e:
-#         print("Error fetching bytes:", e)
-#         return None
+# #     except Exception as e:
+# #         print("Error fetching bytes:", e)
+# #         return None
 
-# ui.h3("OMERO Image Viewer")
+# # ui.h3("OMERO Image Viewer")
 
-# ui.input_text(
-#     "image_id",
-#     "Image ID",
-#     value="11416",
-#     placeholder="Enter OMERO image ID",
-# )
+# # ui.input_text(
+# #     "image_id",
+# #     "Image ID",
+# #     value="11416",
+# #     placeholder="Enter OMERO image ID",
+# # )
 
-# ui.input_action_button(
-#     "search",
-#     "Search",
-# )
+# # ui.input_action_button(
+# #     "search",
+# #     "Search",
+# # )
 
-# @render.image
-# @reactive.event(input.search)
-# def metadata_response():
-#     try:
-#         image_id = int(input.image_id())
-#     except ValueError:
-#         return None
+# # @render.image
+# # @reactive.event(input.search)
+# # def metadata_response():
+# #     try:
+# #         image_id = int(input.image_id())
+# #     except ValueError:
+# #         return None
 
-#     # 1. Get the JPEG bytes from OMERO
-#     data = fetch_metadata_bytes(image_id)
-#     print("data =", type(data), len(data))
+# #     # 1. Get the JPEG bytes from OMERO
+# #     data = fetch_metadata_bytes(image_id)
+# #     print("data =", type(data), len(data))
 
-#     if not data:
-#         return None
+# #     if not data:
+# #         return None
 
-#     # 2. Write to a temp file
-#     tmp_path = os.path.join(THUMB_TMP_DIR, "omero_thumb.jpg")
-#     with open(tmp_path, "wb") as f:
-#         f.write(data)
+# #     # 2. Write to a temp file
+# #     tmp_path = os.path.join(THUMB_TMP_DIR, "omero_thumb.jpg")
+# #     with open(tmp_path, "wb") as f:
+# #         f.write(data)
 
-#     # 3. Return a dict with a *path*, not BytesIO
-#     return {
-#         "src": tmp_path,
-#         "width": "100%",       # optional
-#         "height": "auto",      # optional
-#         "alt": "OMERO thumbnail",
-#     }
+# #     # 3. Return a dict with a *path*, not BytesIO
+# #     return {
+# #         "src": tmp_path,
+# #         "width": "100%",       # optional
+# #         "height": "auto",      # optional
+# #         "alt": "OMERO thumbnail",
+# #     }
 
-# IMAGE_URL = "https://picsum.photos/800/500"
-# OMERO_IMG = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
+# # IMAGE_URL = "https://picsum.photos/800/500"
+# # OMERO_IMG = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
 
-# ui.h3("Iframe demo (internet image)")
+# # ui.h3("Iframe demo (internet image)")
 
-# @render.ui
-# def iframe_view():
-#     return ui.tags.iframe(
-#         src=OMERO_IMG,
-#         style="width: 100%; height: 600px; border: none;",
-#     )
+# # @render.ui
+# # def iframe_view():
+# #     return ui.tags.iframe(
+# #         src=OMERO_IMG,
+# #         style="width: 100%; height: 600px; border: none;",
+# #     )
 
-OMERO_BASE = "https://nife-dev.cancer.gov"  # change if needed
 
-ui.h3("OMERO iframe viewer")
+# # OMERO_BASE = "https://nife-dev.cancer.gov"  # change if needed
 
-# Image ID input
-ui.input_text(
-    "target_image_id",
-    "Image ID",
-    value="11416",
-    placeholder="Enter OMERO image ID",
+# # ui.h3("OMERO iframe viewer")
+
+# # # Image ID input
+# # ui.input_text(
+# #     "target_image_id",
+# #     "Image ID",
+# #     value="11416",
+# #     placeholder="Enter OMERO image ID",
+# # )
+
+# # # Button (Enter triggers this automatically)
+# # ui.input_action_button(
+# #     "load",
+# #     "Load image",
+# # )
+
+# # @render.ui
+# # @reactive.event(input.load)
+# # def omero_iframe():
+# #     image_id = input.target_image_id()
+
+# #     if not image_id:
+# #         return ui.p("Please enter an image ID.")
+
+# #     url = f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}"
+
+# #     return ui.tags.iframe(
+# #         src=url,
+# #         style="width: 100%; height: 800px; border: none;",
+# #         loading="lazy",
+# #     )
+
+from pathlib import Path
+from shiny import App, ui, render, reactive
+
+OMERO_LOGIN_URL = "https://nife-dev.cancer.gov/webclient/login/"
+OMERO_IFRAME_URL = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
+
+WWW_DIR = Path(__file__).parent / "www"
+
+app_ui = ui.page_fluid(
+    ui.tags.div(id="omero_container"),
+    ui.tags.script(src="omero.js")  # this will load from WWW_DIR
 )
 
-# Button (Enter triggers this automatically)
-ui.input_action_button(
-    "load",
-    "Load image",
+app = App(
+    app_ui,
+    server=lambda i, o, s: None,
+    static_assets=WWW_DIR
 )
-
-@render.ui
-@reactive.event(input.load)
-def omero_iframe():
-    image_id = input.target_image_id()
-
-    if not image_id:
-        return ui.p("Please enter an image ID.")
-
-    url = f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}"
-
-    return ui.tags.iframe(
-        src=url,
-        style="width: 100%; height: 800px; border: none;",
-        loading="lazy",
-    )
-    
