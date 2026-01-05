@@ -1,102 +1,88 @@
-# from shiny import App, ui, reactive
+import io
+import os
+import httpx
+from shiny.express import ui, input
+from shiny import render, ui as core_ui, reactive
 
-# # ---- Config ----
-# # Base OMERO viewer URL, without the image id
-# # Example patterns (you’ll adjust this):
-# #   https://omero.example.org/iviewer/?image={image_id}
-# #   https://omero.example.org/webclient/img_detail/{image_id}/?show=viewer
-# OMERO_VIEWER_BASE = "https://nife-dev.cancer.gov/iviewer/?images=11422"
+import tempfile
 
-# from shiny import App, ui, reactive
+THUMB_TMP_DIR = tempfile.gettempdir()  # or a custom dir you control
 
-# # ---- Config ----
-# # OMERO_VIEWER_BASE = "https://omero.example.org/iviewer/?image={image_id}"
+DEFAULT_TIMEOUT = 10.0
+METADATA_API_URL = os.environ.get(
+    "METADATA_API_URL",
+    "https://nife-dev.cancer.gov/metadata/api/thumbnail",
+)
 
-# # ---- UI ----
-# app_ui = ui.page_sidebar(
-#     ui.sidebar(
-#         ui.input_text(
-#             "image_id",
-#             "Image ID",
-#             value="1",
-#             width="100%",
-#         ),
-#         ui.input_action_button("load_btn", "Load Image"),
-#         ui.hr(),
-#         ui.input_text(
-#             "raw_url",
-#             "Or full OMERO viewer URL (overrides Image ID)",
-#             value="",
-#             width="100%",
-#         ),
-#         ui.markdown(
-#             """
-# **Usage**
+def fetch_metadata_bytes(image_id) -> bytes | None:
+    try:
+        with httpx.Client(timeout=DEFAULT_TIMEOUT, verify=True) as client:
+            
+            payload = {
+                "user": "importer",
+                "password": "A)#958hya30r9&*H3r09",
+                "image_id": image_id,
+            }
 
-# - Enter an OMERO image ID and click **Load Image**
-# - Or paste a full iviewer URL.
-#             """
-#         ),
-#         width=4,
-#     ),
+            resp = client.post(METADATA_API_URL, json=payload)
+            resp.raise_for_status()
+            print(resp.content)
+            return resp.content          # <-- BYTES, not BytesIO
 
-#     # main content
-#     ui.layout_columns(
-#         ui.card(
-#             ui.card_header("OMERO iviewer"),
-#             ui.output_ui("viewer_frame"),
-#         ),
-#         col_widths=[12],
-#     ),
-# )
+    except Exception as e:
+        print("Error fetching bytes:", e)
+        return None
 
+ui.h3("OMERO Image Viewer")
 
-# # ---- Server ----
-# def server(input, output, session):
-#     @reactive.Calc
-#     def omero_url():
-#         # If user provides a full URL, trust it.
-#         raw = input.raw_url().strip()
-#         if raw:
-#             return raw
+ui.input_text(
+    "image_id",
+    "Image ID",
+    value="11416",
+    placeholder="Enter OMERO image ID",
+)
 
-#         image_id = input.image_id().strip()
-#         if not image_id:
-#             return None
+ui.input_action_button(
+    "search",
+    "Search",
+)
 
-#         return OMERO_VIEWER_BASE.format(image_id=image_id)
+@render.image
+@reactive.event(input.search)
+def metadata_response():
+    try:
+        image_id = int(input.image_id())
+    except ValueError:
+        return None
 
-#     @output
-#     @ui.render_ui
-#     def omero_view():
-#         url = omero_url()
-#         if not url:
-#             return ui.div("Provide an image ID or URL to view.")
+    # 1. Get the JPEG bytes from OMERO
+    data = fetch_metadata_bytes(image_id)
+    print("data =", type(data), len(data))
 
-#         return ui.div(
-#             ui.tags.iframe(
-#                 src=url,
-#                 style=(
-#                     "width: 100%; "
-#                     "background: red;"
-#                     "height: 80vh; "
-#                     "border: 1px solid #ccc; "
-#                     "border-radius: 8px;"
-#                 ),
-#             )
-#         )
+    if not data:
+        return None
 
+    # 2. Write to a temp file
+    tmp_path = os.path.join(THUMB_TMP_DIR, "omero_thumb.jpg")
+    with open(tmp_path, "wb") as f:
+        f.write(data)
 
-# app = App(app_ui, server)
+    # 3. Return a dict with a *path*, not BytesIO
+    return {
+        "src": tmp_path,
+        "width": "100%",       # optional
+        "height": "auto",      # optional
+        "alt": "OMERO thumbnail",
+    }
 
+IMAGE_URL = "https://picsum.photos/800/500"
+OMERO_IMG = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
 
-# app_express.py
-from shiny.express import input, render, ui
+ui.h3("Iframe demo (internet image)")
 
-# UI: a single slider
-ui.input_slider("n", "N", 0, 100, 20)
-
-# Server: reactive output that shows n*2 as code
-@render.code
-def txt():
-    return f"n*2 is {input.n() * 2}"
+@render.ui
+def iframe_view():
+    return ui.tags.iframe(
+        src=OMERO_IMG,
+        style="width: 100%; height: 600px; border: none;",
+    )
