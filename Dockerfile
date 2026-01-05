@@ -23,4 +23,4 @@ EXPOSE 8000
 
 # 8. Run the Shiny app
 # --host 0.0.0.0 so it’s reachable from outside the container
-CMD ["shiny", "run", "--host", "0.0.0.0", "--port", "8000", "app_express.py"]
+CMD ["shiny", "run", "--host", "0.0.0.0", "--port", "8000", "app.py"]
