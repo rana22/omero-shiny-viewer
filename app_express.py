@@ -75,14 +75,49 @@ def metadata_response():
         "alt": "OMERO thumbnail",
     }
 
-IMAGE_URL = "https://picsum.photos/800/500"
-OMERO_IMG = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
+# IMAGE_URL = "https://picsum.photos/800/500"
+# OMERO_IMG = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422"
 
-ui.h3("Iframe demo (internet image)")
+# ui.h3("Iframe demo (internet image)")
+
+# @render.ui
+# def iframe_view():
+#     return ui.tags.iframe(
+#         src=OMERO_IMG,
+#         style="width: 100%; height: 600px; border: none;",
+#     )
+
+OMERO_BASE = "https://nife-dev.cancer.gov"  # change if needed
+
+ui.h3("OMERO iframe viewer")
+
+# Image ID input
+ui.input_text(
+    "target_image_id",
+    "Image ID",
+    value="11416",
+    placeholder="Enter OMERO image ID",
+)
+
+# Button (Enter triggers this automatically)
+ui.input_action_button(
+    "load",
+    "Load image",
+)
 
 @render.ui
-def iframe_view():
+@reactive.event(input.load)
+def omero_iframe():
+    image_id = input.target_image_id()
+
+    if not image_id:
+        return ui.p("Please enter an image ID.")
+
+    url = f"{OMERO_BASE}/webgateway/render_thumbnail/{image_id}"
+
     return ui.tags.iframe(
-        src=OMERO_IMG,
-        style="width: 100%; height: 600px; border: none;",
+        src=url,
+        style="width: 100%; height: 800px; border: none;",
+        loading="lazy",
     )
+    
