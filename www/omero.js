@@ -77,7 +77,7 @@ function displayIviewer(container, imageId) {
     const iviewerframe = document.createElement("iframe");
     iviewerframe.src = url;
     iviewerframe.style.width = "100%";
-    iviewerframe.style.height = "600px";
+    iviewerframe.style.height = "900px";
     iviewerframe.style.border = "0";
 
     iviewerArea.appendChild(iviewerframe);
