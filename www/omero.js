@@ -1,41 +1,36 @@
 console.log("omero.js loaded");
 
-console.log("omero.js loaded");
+async function getOmeroImage() {
+  const url = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422/";
+  checkThumbnailWithImg(url)
+      .then(() => {
+          // logged in (or image is publicly accessible)
+          showOMEROIframe();
+      })
+      .catch(() => {
+          showLoginButton();
+  });
+};
 
-async function verifyOMEROLogin() {
-  try {
-    showOMEROIframe("data.username");
-    const response = await fetch("https://nife-dev.cancer.gov/metadata/api/verify", {
-      method: "GET",
-      credentials: "include",
-      headers: { "Accept": "application/json" }
-    });
+function checkThumbnailWithImg(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
 
-    // if (!response.ok) {
-    //   throw new Error(`HTTP ${response.status}`);
-    // }
+    img.onload = () => resolve(true);   // image returned
+    img.onerror = () => reject(new Error("Not an image (likely login/HTML or blocked)"));
 
-    // const data = await response.json();
-    // console.log("verify_login response:", data);
-
-    // if (data.isLoggedIn) {
-    //   showOMEROIframe(data.username);
-    // } else {
-    //   showLoginButton();
-    // }
-
-  } catch (err) {
-    console.error("Login verification failed:", err);
-    showLoginButton();
-  }
+    // Cache-bust so you don't get a stale result
+    const sep = url.includes("?") ? "&" : "?";
+    img.src = url + sep + "cb=" + Date.now();
+  });
 }
 
-function showOMEROIframe(username) {
+function showOMEROIframe() {
   const container = document.getElementById("omero_container");
   container.innerHTML = "";
 
   const info = document.createElement("div");
-  info.textContent = `Logged in as ${username}`;
+  info.textContent = `Logged in`;
   info.style.marginBottom = "8px";
 
   const iframe = document.createElement("iframe");
@@ -57,10 +52,9 @@ function showLoginButton() {
   btn.href = "https://nife-dev.cancer.gov/omero_plus/login/?url=%2Fwebclient%2F";
   btn.target = "_blank";
   btn.className = "btn btn-primary";
-
   container.appendChild(btn);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  verifyOMEROLogin();
+  getOmeroImage();
 });
