@@ -63,7 +63,7 @@ function displayImage (container, url) {
     const iframe = document.createElement("iframe");
     iframe.src = url;
     iframe.style.width = "100%";
-    iframe.style.height = "800px";
+    iframe.style.height = "80px";
     iframe.style.border = "0";
 
     viewerArea.appendChild(iframe);
