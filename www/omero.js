@@ -175,22 +175,39 @@ function showErrorContent(viewerArea) {
 //   container.innerHTML = "";
 
   // Notification message
-  const message = document.createElement("div");
-  message.textContent =
-    `Image with id Not found OR \n` +
-    "You are not logged in to OMERO. Please log in using the button below. " +
-    "If you have already logged provide valid image id and click “View Image”.";
+  const messageContainer = document.createElement("div");
+  //   message.textContent =
+  //     `Image with id Not found OR \n` +
+  //     "You are not logged in to OMERO. Please log in using the button below. " +
+  //     "If you have already logged provide valid image id and click “View Image”.";
+  const message = document.createElement("ul");
+  message.style.marginBottom = "12px";
+  message.style.paddingLeft = "20px";  
 
-  message.style.padding = "12px 16px";
-  message.style.marginBottom = "16px";
-  message.style.borderRadius = "6px";
-  message.style.backgroundColor = "#a8cda6ff";   // soft warning yellow
-  message.style.border = "1px solid #39692aff";
-  message.style.color = "#050505ff";
-  message.style.fontSize = "16px";
-  message.style.lineHeight = "1.5";
+  const li1 = document.createElement("li");
+  li1.textContent = "Image with the specified ID was not found.";  
 
-  viewerArea.appendChild(message);
+  const li2 = document.createElement("li");
+  li2.textContent =
+    "You are not logged in to OMERO. Please log in using the button below.";  
+
+  const li3 = document.createElement("li");
+  li3.textContent =
+  "If you are already logged in, provide a valid Image ID and click “View Image”.";
+
+  message.appendChild(li1);
+  message.appendChild(li2);
+  message.appendChild(li3);
+  messageContainer.style.padding = "12px 16px";
+  messageContainer.style.marginBottom = "16px";
+  messageContainer.style.borderRadius = "6px";
+  messageContainer.style.backgroundColor = "#e1b4c0ff";   // soft warning yellow
+  messageContainer.style.border = "1px solid #86424bff";
+  messageContainer.style.color = "#050505ff";
+  messageContainer.style.fontSize = "16px";
+  messageContainer.style.lineHeight = "1.5";
+  messageContainer.append(message);
+  viewerArea.appendChild(messageContainer);
 
   // Button container
   const wrapper = document.createElement("div");
