@@ -13,6 +13,7 @@ function checkThumbnailWithImg(url) {
   });
 };
 
+const OMERO_BASE = 'https://nife-dev.cancer.gov';
 const OMERO_WEBCLIENT_BASE = "https://nife-dev.cancer.gov/webclient"; // webclient base
 // Common OMERO.webclient pattern:
 function buildOmeroViewerUrl(imageId) {
@@ -68,11 +69,26 @@ function displayImage (container, url) {
     viewerArea.appendChild(iframe);
 };
 
+function displayIviewer(container, imageId) {
+    console.log('display iviewer');
+    const iviewerArea = container.querySelector("#omero_iviewer_area");
+    iviewerArea.innerHTML = "";
+    const url = `${OMERO_BASE}/iviewer/?images=${imageId}`;
+    const iviewerframe = document.createElement("iframe");
+    iviewerframe.src = url;
+    iviewerframe.style.width = "100%";
+    iviewerframe.style.height = "80px";
+    iviewerframe.style.border = "0";
+
+    iviewerArea.appendChild(iviewerframe);
+}
+
 function loadImageIntoIframe(container, imageId) {
   const url = buildOmeroViewerUrl(imageId)
   checkThumbnailWithImg(url)
     .then(() => {
       displayImage(container, url);
+      displayIviewer(container, imageId);
     })
     .catch(err => {
       console.log(imageId);
@@ -133,6 +149,9 @@ function showOMEROIframe() {
   const viewerArea = document.createElement("div");
   viewerArea.id = "omero_viewer_area";
 
+  const iviewerArea = document.createElement("div");
+  iviewerArea.id = "omero_iviewer_area";
+
   // Helper: validate and load
   const onView = () => {
     const raw = (input.value || "").trim();
@@ -165,6 +184,7 @@ function showOMEROIframe() {
   container.appendChild(info);
   container.appendChild(controls);
   container.appendChild(viewerArea);
+  container.appendChild(iviewerArea);
 
   // Initial state: show 404-style prompt until user enters an ID
   showNotFound(container, "Image ID not found (enter an ID)");
