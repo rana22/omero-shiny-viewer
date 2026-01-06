@@ -1,17 +1,5 @@
 console.log("omero.js loaded");
 
-async function getOmeroImage() {
-  const url = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422/";
-  checkThumbnailWithImg(url)
-      .then(() => {
-          // logged in (or image is publicly accessible)
-          showOMEROIframe();
-      })
-      .catch(() => {
-          showLoginButton();
-  });
-};
-
 function checkThumbnailWithImg(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -23,38 +11,203 @@ function checkThumbnailWithImg(url) {
     const sep = url.includes("?") ? "&" : "?";
     img.src = url + sep + "cb=" + Date.now();
   });
+};
+
+const OMERO_WEBCLIENT_BASE = "https://nife-dev.cancer.gov/webclient"; // webclient base
+// Common OMERO.webclient pattern:
+function buildOmeroViewerUrl(imageId) {
+  // If your OMERO expects a different pattern, change this line only.
+  return `${OMERO_WEBCLIENT_BASE}/render_thumbnail/${imageId}`;
 }
 
+// --- 404 image (inline SVG data URI) ---
+function get404DataUri(message) {
+  const svg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="900" height="260">
+    <rect width="100%" height="100%" fill="#f8d7da"/>
+    <rect x="18" y="18" width="864" height="224" rx="12" fill="#ffffff" stroke="#f5c2c7"/>
+    <text x="60" y="110" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="72" font-weight="800" fill="#842029">404</text>
+    <text x="60" y="160" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="22" fill="#842029">${message}</text>
+    <text x="60" y="200" font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial" font-size="16" fill="#842029">Enter a valid Image ID and try again.</text>
+  </svg>`;
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg.trim());
+}
+
+function showNotFound(container, reasonText = "Image ID not found") {
+  // Clear viewer area and show a 404-style image + text
+  const viewerArea = container.querySelector("#omero_viewer_area");
+  viewerArea.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = get404DataUri(reasonText);
+  img.alt = reasonText;
+  img.style.width = "100%";
+  img.style.maxWidth = "900px";
+  img.style.display = "block";
+  img.style.borderRadius = "8px";
+  img.style.border = "1px solid #f5c2c7";
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "flex";
+  wrap.style.justifyContent = "center";
+  wrap.appendChild(img);
+
+  viewerArea.appendChild(wrap);
+}
+
+function displayImage (container, url) {
+    const viewerArea = container.querySelector("#omero_viewer_area");
+    viewerArea.innerHTML = "";
+
+    const iframe = document.createElement("iframe");
+    iframe.src = url;
+    iframe.style.width = "100%";
+    iframe.style.height = "800px";
+    iframe.style.border = "0";
+
+    viewerArea.appendChild(iframe);
+};
+
+function loadImageIntoIframe(container, imageId) {
+  const url = buildOmeroViewerUrl(imageId)
+  checkThumbnailWithImg(url)
+    .then(() => {
+      displayImage(container, url);
+    })
+    .catch(err => {
+      console.log(imageId);
+      // showNotFound(container);
+      const viewerArea = container.querySelector("#omero_viewer_area");
+      viewerArea.innerHTML = "";
+      showErrorContent(viewerArea);
+  })
+}
+
+/**
+ * showOMEROIframe(username)
+ * Renders:
+ * - header "Logged in as ..."
+ * - input + button to choose Image ID
+ * - iframe viewer area
+ * If Image ID is missing/invalid => shows 404 image
+ */
 function showOMEROIframe() {
   const container = document.getElementById("omero_container");
+  if (!container) {
+    console.error("Missing #omero_container in DOM");
+    return;
+  }
   container.innerHTML = "";
 
+  // Header line
   const info = document.createElement("div");
-  info.textContent = `Logged in`;
-  info.style.marginBottom = "8px";
+  info.textContent = "Logged in to OMERO";
+  info.style.margin = "0 0 10px 0";
+  info.style.fontSize = "14px";
 
-  const iframe = document.createElement("iframe");
-  iframe.src = "https://nife-dev.cancer.gov/webgateway/render_thumbnail/11422";
-  iframe.style.width = "100%";
-  iframe.style.height = "800px";
-  iframe.style.border = "0";
+  // Control panel
+  const controls = document.createElement("div");
+  controls.style.display = "flex";
+  controls.style.gap = "10px";
+  controls.style.alignItems = "center";
+  controls.style.marginBottom = "12px";
+
+  const label = document.createElement("span");
+  label.textContent = "Image ID:";
+  label.style.fontSize = "14px";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "e.g., 11422";
+  input.inputMode = "numeric";
+  input.style.padding = "8px 10px";
+  input.style.border = "1px solid #ccc";
+  input.style.borderRadius = "6px";
+  input.style.width = "180px";
+
+  const btn = document.createElement("button");
+  btn.textContent = "View Image";
+  btn.className = "btn btn-primary";
+
+  // Viewer area
+  const viewerArea = document.createElement("div");
+  viewerArea.id = "omero_viewer_area";
+
+  // Helper: validate and load
+  const onView = () => {
+    const raw = (input.value || "").trim();
+    // If empty => 404 image
+    if (!raw) {
+      showNotFound(container, "Provide Image ID");
+      return;
+    }
+
+    // Numeric check (OMERO image IDs are typically integers)
+    const imageId = Number(raw);
+    if (!Number.isInteger(imageId) || imageId <= 0) {
+      showNotFound(container, `Image ID not found (${raw})`);
+      return;
+    }
+
+    // Load iframe viewer
+    loadImageIntoIframe(container, imageId);
+  };
+
+  btn.addEventListener("click", onView);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") onView();
+  });
+
+  controls.appendChild(label);
+  controls.appendChild(input);
+  controls.appendChild(btn);
 
   container.appendChild(info);
-  container.appendChild(iframe);
+  container.appendChild(controls);
+  container.appendChild(viewerArea);
+
+  // Initial state: show 404-style prompt until user enters an ID
+  showNotFound(container, "Image ID not found (enter an ID)");
 }
 
-function showLoginButton() {
-  const container = document.getElementById("omero_container");
-  container.innerHTML = "";
+function showErrorContent(viewerArea) {
+//   const container = document.getElementById("omero_container");
+//   container.innerHTML = "";
 
-  const btn = document.createElement("a");
-  btn.textContent = "Log in to OMERO";
-  btn.href = "https://nife-dev.cancer.gov/omero_plus/login/?url=%2Fwebclient%2F";
-  btn.target = "_blank";
-  btn.className = "btn btn-primary";
-  container.appendChild(btn);
+  // Notification message
+  const message = document.createElement("div");
+  message.textContent =
+    `Image with id Not found OR \n` +
+    "You are not logged in to OMERO. Please log in using the button below. " +
+    "If you have already logged provide valid image id and click “View Image”.";
+
+  message.style.padding = "12px 16px";
+  message.style.marginBottom = "16px";
+  message.style.borderRadius = "6px";
+  message.style.backgroundColor = "#a8cda6ff";   // soft warning yellow
+  message.style.border = "1px solid #39692aff";
+  message.style.color = "#050505ff";
+  message.style.fontSize = "16px";
+  message.style.lineHeight = "1.5";
+
+  viewerArea.appendChild(message);
+
+  // Button container
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "flex";
+  wrapper.style.gap = "12px";
+  wrapper.style.alignItems = "center";
+
+  // Login button
+  const loginBtn = document.createElement("a");
+  loginBtn.textContent = "Log in to OMERO";
+  loginBtn.href = "https://nife-dev.cancer.gov/omero_plus/login/?url=%2Fwebclient%2F";
+  loginBtn.target = "_blank";
+  loginBtn.className = "btn btn-primary";
+
+  viewerArea.appendChild(loginBtn);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  getOmeroImage();
+  showOMEROIframe();
 });
