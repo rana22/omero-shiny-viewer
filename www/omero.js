@@ -6,7 +6,9 @@ async function verifyOMEROLogin() {
   try {
     showOMEROIframe("data.username");
     const response = await fetch("https://nife-dev.cancer.gov/metadata/api/verify", {
-      method: "GET"
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" }
     });
 
     // if (!response.ok) {
