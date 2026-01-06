@@ -95,6 +95,8 @@ function loadImageIntoIframe(container, imageId) {
       // showNotFound(container);
       const viewerArea = container.querySelector("#omero_viewer_area");
       viewerArea.innerHTML = "";
+      const iviewerArea = container.querySelector("#omero_iviewer_area");
+      iviewerArea.innerHTML = "";
       showErrorContent(viewerArea);
   })
 }
