@@ -9,7 +9,7 @@ WWW_DIR = Path(__file__).parent / "www"
 app_ui = ui.page_fluid(
     ui.tags.div(id="omero_container"),
     # ui.tags.script(src="omero.js")  # this will load from WWW_DIR
-    ui.tags.script(src="https://raw.githubusercontent.com/CBIIT/omero-external-ui/main/shiny/OmeroViewer.js")
+    ui.tags.script(src="https://cdn.jsdelivr.net/gh/CBIIT/omero-external-ui@latest/shiny/OmeroViewer.js")
 )
 
 app = App(
