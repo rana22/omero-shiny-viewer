@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "locale": "en_US.UTF-8",
+  "metadata": {
+    "appmode": "python-shiny",
+    "entrypoint": "app"
+  },
+  "python": {
+    "version": "3.12.2",
+    "package_manager": {
+      "name": "pip",
+      "version": "24.2",
+      "package_file": "requirements.txt"
+    }
+  },
+  "files": {
+    "requirements.txt": {
+      "checksum": "fed58055414bb991d8801b2800f8272f"
+    },
+    ".github/workflows/deploy.yml": {
+      "checksum": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    ".gitignore": {
+      "checksum": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "Dockerfile": {
+      "checksum": "351fcec21211c754c177fc9b72683dd7"
+    },
+    "app.py": {
+      "checksum": "ced2af1e8c5f394ce38704e1e3980bf0"
+    },
+    "app_express.py": {
+      "checksum": "ced2af1e8c5f394ce38704e1e3980bf0"
+    },
+    "index.html": {
+      "checksum": "17f777edc77505d457d911d174e7ab3c"
+    },
+    "www/omero.js": {
+      "checksum": "02da992eeeb7edff8c92c2e0b3c13923"
+    }
+  }
+}
