@@ -34,27 +34,27 @@ function get404DataUri(message) {
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg.trim());
 }
 
-function showNotFound(container, reasonText = "Image ID not found") {
-  // Clear viewer area and show a 404-style image + text
-  const viewerArea = container.querySelector("#omero_viewer_area");
-  viewerArea.innerHTML = "";
+// function showNotFound(container, reasonText = "Image ID not found") {
+//   // Clear viewer area and show a 404-style image + text
+//   const viewerArea = container.querySelector("#omero_viewer_area");
+//   viewerArea.innerHTML = "";
 
-  const img = document.createElement("img");
-  img.src = get404DataUri(reasonText);
-  img.alt = reasonText;
-  img.style.width = "100%";
-  img.style.maxWidth = "900px";
-  img.style.display = "block";
-  img.style.borderRadius = "8px";
-  img.style.border = "1px solid #f5c2c7";
+//   const img = document.createElement("img");
+// //   img.src = get404DataUri(reasonText);
+//   img.alt = reasonText;
+//   img.style.width = "100%";
+//   img.style.maxWidth = "900px";
+//   img.style.display = "block";
+//   img.style.borderRadius = "8px";
+//   img.style.border = "1px solid #f5c2c7";
 
-  const wrap = document.createElement("div");
-  wrap.style.display = "flex";
-  wrap.style.justifyContent = "center";
-  wrap.appendChild(img);
+//   const wrap = document.createElement("div");
+//   wrap.style.display = "flex";
+//   wrap.style.justifyContent = "center";
+//   wrap.appendChild(img);
 
-  viewerArea.appendChild(wrap);
-}
+//   viewerArea.appendChild(wrap);
+// }
 
 function displayImage (container, url) {
     const viewerArea = container.querySelector("#omero_viewer_area");
@@ -119,9 +119,9 @@ function showOMEROIframe() {
 
   // Header line
   const info = document.createElement("div");
-  info.textContent = "Logged in to OMERO";
+  info.textContent = "Provide valid image id to view images from OMERO";
   info.style.margin = "0 0 10px 0";
-  info.style.fontSize = "14px";
+  info.style.fontSize = "20px";
 
   // Control panel
   const controls = document.createElement("div");
@@ -159,14 +159,20 @@ function showOMEROIframe() {
     const raw = (input.value || "").trim();
     // If empty => 404 image
     if (!raw) {
-      showNotFound(container, "Provide Image ID");
+    //   showNotFound(container, "Provide Image ID");
+      viewerArea.innerHTML = "";
+      iviewerArea.innerHTML = "";
+      showErrorContent(viewerArea);
       return;
     }
 
     // Numeric check (OMERO image IDs are typically integers)
     const imageId = Number(raw);
     if (!Number.isInteger(imageId) || imageId <= 0) {
-      showNotFound(container, `Image ID not found (${raw})`);
+    //   showNotFound(container, `Image ID not found (${raw})`);
+      viewerArea.innerHTML = "";
+      iviewerArea.innerHTML = "";
+      showErrorContent(viewerArea);
       return;
     }
 
@@ -189,7 +195,7 @@ function showOMEROIframe() {
   container.appendChild(iviewerArea);
 
   // Initial state: show 404-style prompt until user enters an ID
-  showNotFound(container, "Image ID not found (enter an ID)");
+//   showNotFound(container, "Image ID not found (enter an ID)");
 }
 
 function showErrorContent(viewerArea) {
